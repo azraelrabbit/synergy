@@ -1,0 +1,11 @@
+Package: synergy
+Section: net
+Priority: optional
+Maintainer: yupi2 <yupi2@openmailbox.org>
+Version: ${PROJECT_VERSION}
+Homepage: https://github.com/yupi2/synergy
+Architecture: ${DEB_ARCH}
+Installed-Size: 10000
+Description: Keyboard and mouse sharing utility
+ Synergy is free and open source software for sharing one mouse and keyboard
+ between multiple computers. Works on Windows, Mac OS X and Linux.

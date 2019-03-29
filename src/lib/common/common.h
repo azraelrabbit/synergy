@@ -23,7 +23,8 @@
 #include <stdint.h>
 
 #if HAVE_CONFIG_H
-#	include "../../../build/config.h"
+//#	include "../../../build/config.h"
+#	include "config.h"
 
 	// don't use poll() on mac
 #	if defined(__APPLE__)
@@ -55,8 +56,6 @@
 #		define HAVE_NANOSLEEP 1
 #		define HAVE_OSTREAM 1
 #		define HAVE_POSIX_SIGWAIT 1
-#		define HAVE_PTHREAD 1
-#		define HAVE_PTHREAD_SIGNAL 1
 #		include <sys/types.h>
 #		include <sys/socket.h>
 #		if defined(_SOCKLEN_T)

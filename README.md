@@ -3,10 +3,12 @@ Synergy
 Share one buggy mouse and one buggy keyboard between multiple computers.
 ---
 
-**You can find 32-bit and 64-bit Windows installers in the [Releases tab](https://github.com/yupi2/synergy/releases)**
+**Visit https://github.com/yupi2/synergy/releases/latest for the latest 32/64-bit Windows installers and 64-bit Linux .deb files**<br/>
+You can find more at https://github.com/yupi2/synergy/releases <br/>
+**Last Windows XP build since LibreSSL doesn't support Windows XP anymore https://github.com/yupi2/synergy/releases/tag/4.2.0_master_0d1aad0dacc071f9981f778e2ee8a10f36b57ec5 .**
 
-appveyor master: [![Build status master](https://ci.appveyor.com/api/projects/status/ayhyxtpmgmfr3x9n/branch/master?svg=true)](https://ci.appveyor.com/project/yupi2/synergy/branch/master)<br/>
-appveyor activey: [![Build status activey](https://ci.appveyor.com/api/projects/status/ayhyxtpmgmfr3x9n/branch/activey?svg=true)](https://ci.appveyor.com/project/yupi2/synergy/branch/activey)
+[Travis](https://travis-ci.org/yupi2/synergy) (Linux .debs) <br/>
+[Appveyor](https://ci.appveyor.com/project/yupi2/synergy) (Windows)
 
 This is a fork whose goal is to be less buggy, build easier, and to remove the activation requirement for features.
 
@@ -44,8 +46,6 @@ There's a few things not listed here. Go through the commits.
   + As opposed to not sending the keycodes and only treating them as modifiers.
   + `Configure Server -> Double-click a screen -> Pass LOCK keys`
 + Merged some pull-requests that are fine from the symless/synergy repo.
-  + Some that I haven't merged but will look into: #6161 #6151 #6064 #5730 #5245 #5073 #4542
-
 
 Licenses and stuff
 ------------------
@@ -57,6 +57,46 @@ A tar-gz archive of [LibreSSL](https://www.libressl.org/), an OpenSSL fork, is d
 
 The archive is retrieved from https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/
 
+
+TODOs and wishlist
+------------------
++ Detect local input even when not connected
+  + Will need to look into this eventually.
+  + https://github.com/symless/synergy-core/issues/6161
++ Cleaner core without obsolete legacy components
+  + **NOT REMOVING STUFF** just seeing if merging any of the CMake stuff for exmaple would be good.
+  + https://github.com/symless/synergy-core/issues/6151
++ Send modifier keys differently depending on active window
+  + Seems to be a mostly Parallels oriented PR but it is OSX stuff which I don't have available to test.
+  + https://github.com/symless/synergy-core/pull/6064
++ Map JIS Keys to make OS X synergy server comfortable.
+  + More OSX stuff + would need testing for non-JIS keyboard layouts...
+  + https://github.com/symless/synergy-core/pull/5730
++ Add an option to ignore VirtualBox network adapters
+  + Should just add a drop-down box where you can pick your network adapter...
+  + https://github.com/symless/synergy-core/pull/5245
++ Specfile for building in fedora/centos
+  + Just need to look into this and then Fedora builds can likely be setup (.rpm files)
+  + https://github.com/symless/synergy-core/pull/5073
++ Dependencies not found with the 'check_' macros
+  + This is a big maybe. Not sure if this would be a better thing to use.
+  + https://github.com/symless/synergy-core/pull/4542
++ Remove synwinhk DLL
+  + The DLL isn't used in modern Windows and it just makes uninstalling/updating a pain. Also it loads the DLL into most processes which breaks Fornite with the latest update D:
+  + https://github.com/symless/synergy-core/issues/6226
+  + Add synwinhk support to synergyc - https://github.com/symless/synergy-core/commit/c3530a0ff35cd77c3f7221deeeebe83f90b5728a
+  + Remove synwinhk DLL - https://github.com/symless/synergy-core/commit/703097c19b58f0bbd14f998107279dfda4ff1600
+  + ^ That commit has some parents too which might be needed.
++ Compare source pid from event to detect local input on Mac
+  + Haven't looked into this
+  + https://github.com/symless/synergy-core/commit/9551329392ee597b2781626d38b4f249c71b96c1
++ Initialize XWindowsScreen to offscreen for secondary displays
+  + I don't think this is a problem at the moment on this fork. It is based on a commit that touched some stuff so I don't know how different they are...
+  + https://github.com/symless/synergy-core/pull/6249
+  + Partial local input detection for Linux - https://github.com/symless/synergy-core/commit/41721e9eac5532ce7c048a3b63851b3736c0244b
++ Reallocate socket buffer when size is not big enough
+  + I don't know if this is a problem for anyone.
+  + https://github.com/symless/synergy-core/pull/6174
 
 Building
 --------
@@ -72,15 +112,21 @@ Building
 + WiX Toolset if you plan to make installers for Windows Platforms.
 + Any recent version of Git in your command path
 
-Here's how I build on Linux:<br/>
+**Here's how I build on Linux:**<br/>
+```
+./configure
+make -C build -j$(nproc)
+```
+or
 ```
 mkdir build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Release ../
 cmake --build ./ -- -j$(nproc)
 ```
+And optionally for packaging a .deb afterward: `./package_deb.sh`
 
-And on 64-bit Windows 7 with Visual Studio 2015:<br/>
+**And on 64-bit Windows 7 with Visual Studio 2015:**<br/>
 ```
 mkdir build
 cd build
@@ -100,6 +146,14 @@ git submodule update --init
 ```
 If you have a preinstalled version of *googletest* from a package-manager or something and want to use it then check out `src/test/CMakeLists.txt` and maybe change some directories.
 
+**Some cmake things:**
++ `-DCMAKE_BUILD_TYPE=[Release|Debug|etc]` 
++ `-DDEB_ARCH=[amd64|i386|etc]` - used for setting the arch in `synergy/dist/deb/control.in`
++ `-D_TESTS=[ON|OFF]` - turn tests on or off
++ `-D_USE_C_DATE=[ON|OFF]` - useful for reproducible builds - embeds build time from compiler
++ `-D_LIBRESSL_PATH=path` - use your own LibreSSL release
++ `-D_GIT_REVISION=` - specify revision
++ `-D_GIT_BRANCH=` - specify branch
 
 (Windows) Compiling with Microsoft's Visual C++ environment (and creating an installer!)
 -----------------------------------------------------------
@@ -156,10 +210,29 @@ Notes:
 Requirements:
 + Compiler!
 + CMake!
-+ Qt!
-  + ~~Also you'll need the Qt5 Linguist Tools which might be `qttools5-dev-tools` or `qt5-tools`.~~ Maybe not.
++ Qt5!
+  + ~~Also you'll need the Qt5 Linguist Tools which might be `qttools5-dev-tools` or `qt5-tools`.~~ This isn't true anymore.
 + X11!
-  + X11/Xorg dev packages along with something like `libXtst-devel`.
+  + X11/Xorg dev packages (libxtst, libxext, and more I think).
++ Debian and Ubuntu packages:
+  + (`apt install`) `git build-essential cmake xorg-dev qt5-default`
++ Fedora packages (INCOMPLETE):
+  + `git cmake libXtst-devel libXext-devel qt5-devel `
+1. Open terminal.
+2. `cd ~/code`
+3. `git clone https://github.com/yupi2/synergy.git`
+4. `cd synergy`
+5. `./configure`
+    + You can pass regular cmake arguments to the `./configure` thing. Read the `configure` file for more information on what it does.
+    + You can do `MY_SYN_BUILD_DIR=/folder/to/thing` for build dir and `MY_SYN_PWD=/folder/to/syn` for root synergy dir.
+5. `make -C build -j$(nproc)`
+    + `$(nproc)` uses the number of processors available. You can use a static number of cores with `-jN` where `N` is your number or remove it entirely
+7. `ls bin`
+8. If packaging a .deb then: `./package_deb.sh`
+    + You can do `MY_SYN_BUILD_DIR=/folder/to/thing` for the build dir.
+	+ You can install the .deb with `sudo dpkg -i build/deb/synergy.deb`
+
+**or**
 
 1. Open terminal.
 2. `cd ~/code`
@@ -170,7 +243,9 @@ Requirements:
 6. `cmake --build ./ -- -j$(nproc)`
     + `$(nproc)` uses the number of processors available. You can use a static number of cores with `-jN` where `N` is your number or remove it entirely `cmake -build ./`
 7. `ls bin`
-
+8. If packaging a .deb then: `./package_deb.sh`
+    + You can do `MY_SYN_BUILD_DIR=/folder/to/thing` for the build dir.
+	+ You can install the .deb with `sudo dpkg -i build/deb/synergy.deb`
 
 (Apple macOS) Compiling
 -----------------------

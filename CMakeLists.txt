@@ -16,6 +16,16 @@
 
 cmake_minimum_required(VERSION 3.0)
 
+# https://blog.kitware.com/cmake-and-the-default-build-type/
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  message(STATUS "Setting build type to 'Release' as none was specified.")
+  set(CMAKE_BUILD_TYPE "Release" CACHE
+      STRING "Choose the type of build." FORCE)
+  # Set the possible values of build type for cmake-gui
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
+    "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+endif()
+
 # First, declare project (important for prerequisite checks).
 project(synergy
 	LANGUAGES C CXX
@@ -49,8 +59,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${EXECUTABLE_OUTPUT_PATH}")
 if ("${_LIBRESSL_PATH}" STREQUAL "")
 	# user did not provide anything so we skip lower
 
-	set(_LIBRESSL_VERSION "libressl-2.6.3")
-	set(_LIBRESSL_SHA256 "aead6598263171b96970da0d881e616d0813b69b35ebdc5991f87ff2ea7f5c98")
+	set(_LIBRESSL_VERSION "libressl-2.7.4")
+	set(_LIBRESSL_SHA256 "1e3a9fada06c1c060011470ad0ff960de28f9a0515277d7336f7e09362517da6")
 	# set to in-source location of where libressl will be uncompressed to
 	set(_LIBRESSL_PATH "${root_dir}/ext/${_LIBRESSL_VERSION}")
 
@@ -86,15 +96,25 @@ if ("${_LIBRESSL_PATH}" STREQUAL "")
 	endif()
 endif()
 
+# Just so we can get -pthread passing to LibreSSL...
+# I don't like this...
+# TODO: ask upstream to add -pthread to flags
+set(LibreSSL_C_FLAGS "${CMAKE_C_FLAGS}")
+if (UNIX)
+	list(APPEND LibreSSL_C_FLAGS "-pthread")
+endif()
+
 include(ExternalProject)
 set_property(DIRECTORY PROPERTY EP_STEP_TARGETS configure build test)
 ExternalProject_Add(libressl
 	PREFIX libressl
 	SOURCE_DIR "${_LIBRESSL_PATH}"
 	INSTALL_COMMAND ""
-	CMAKE_ARGS -DLIBRESSL_SKIP_INSTALL=ON
+	CMAKE_ARGS -DLIBRESSL_SKIP_INSTALL=ON -DCMAKE_C_FLAGS="${LibreSSL_C_FLAGS}"
 )
 
+# TODO: Is this necessary?
+#       In other words, can a Travis environment variable replace this?
 if ("${_GIT_REVISION}" STREQUAL "")
 	execute_process(
 		COMMAND git rev-parse HEAD
@@ -161,7 +181,8 @@ if (UNIX)
 
 	# warnings as errors:
 	# we have a problem with people checking in code with warnings.
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-unused-local-typedefs")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror -Wno-unused-local-typedefs -pthread")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-unused-local-typedefs -pthread")
 
 	if (NOT APPLE)
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
@@ -229,13 +250,10 @@ if (UNIX)
 	check_type_size(long SIZEOF_LONG)
 	check_type_size(short SIZEOF_SHORT)
 
-	# pthread is used on both Linux and Mac
-	check_library_exists("pthread" pthread_create "" HAVE_PTHREAD)
-	if (HAVE_PTHREAD)
-		list(APPEND libs pthread)
-	else()
-		message(FATAL_ERROR "Missing library: pthread")
-	endif()
+	set(CMAKE_THREAD_PREFER_PTHREAD ON) 
+	set(THREADS_PREFER_PTHREAD_FLAG ON)
+	find_package(Threads REQUIRED)
+	list(APPEND libs ${CMAKE_THREAD_LIBS_INIT} Threads::Threads)
 
 	if (APPLE)
 		message(STATUS "OSX_TARGET_MAJOR=${OSX_TARGET_MAJOR}")
@@ -308,6 +326,7 @@ if (UNIX)
 		check_library_exists("Xi" XISelectEvents "" HAVE_Xi)
 		check_library_exists("Xrandr" XRRQueryExtension "" HAVE_Xrandr)
 
+		# TODO: Is this needed? Only for Qt? http://doc.qt.io/qt-5/linux-requirements.html
 		if (HAVE_ICE)
 			# Assume we have SM if we have ICE.
 			set(HAVE_SM 1)
@@ -347,8 +366,24 @@ if (UNIX)
 
 		add_definitions(-DWINAPI_XWINDOWS=1)
 
+		if("${DEB_ARCH}" STREQUAL "")
+			if("${TRAVIS}" STREQUAL "true")
+				# travis ci only does amd64 stuff
+				set(DEB_ARCH "amd64")
+			else()
+				# I'm not sure sure what the best way is to detect and map arches to debian formats
+				set(DEB_ARCH "all")
+			endif()
+		endif()
+		# https://manpages.debian.org/unstable/dpkg-dev/deb-control.5.en.html
+		configure_file("${root_dir}/dist/deb/control.in" "${CMAKE_BINARY_DIR}/deb/synergy/DEBIAN/control")
+		configure_file("${root_dir}/dist/deb/copyright" "${CMAKE_BINARY_DIR}/deb/synergy/DEBIAN/copyright")
+		configure_file("${root_dir}/dist/deb/changelog" "${CMAKE_BINARY_DIR}/deb/synergy/DEBIAN/changelog")
+		configure_file("${root_dir}/res/synergy.desktop" "${CMAKE_BINARY_DIR}/deb/synergy/usr/share/applications/synergy.desktop")
+		configure_file("${root_dir}/res/synergy.svg" "${CMAKE_BINARY_DIR}/deb/synergy/usr/share/icons/synergy.svg")
 	endif()
 
+	# TODO:
 	# For config.h, set some static values; it may be a good idea to make
 	# these values dynamic for non-standard UNIX compilers.
 	set(ACCEPT_TYPE_ARG3 socklen_t)
@@ -357,7 +392,6 @@ if (UNIX)
 	set(HAVE_CXX_EXCEPTIONS 1)
 	set(HAVE_CXX_MUTABLE 1)
 	set(HAVE_CXX_STDLIB 1)
-	set(HAVE_PTHREAD_SIGNAL 1)
 	set(SELECT_TYPE_ARG1 int)
 	set(SELECT_TYPE_ARG234 "(fd_set *)")
 	set(SELECT_TYPE_ARG5 "(struct timeval *)")
@@ -367,6 +401,7 @@ if (UNIX)
 
 	# For config.h, save the results based on a template (config.h.in).
 	configure_file("${root_dir}/res/config.h.in" "${CMAKE_BINARY_DIR}/config.h")
+	include_directories("${CMAKE_BINARY_DIR}")
 
 	add_definitions(-DSYSAPI_UNIX=1 -DHAVE_CONFIG_H)
 
@@ -382,8 +417,8 @@ else() # not-unix
 		/D_WINDOWS
 		/D_CRT_SECURE_NO_WARNINGS
 		/D_XKEYCHECK_H
-		/DWINVER=0x0501
-		/D_WIN32_WINNT=0x0501
+		/DWINVER=0x0600
+		/D_WIN32_WINNT=0x0600
 	)
 
 	#if (MSVC_VERSION EQUAL 1600)
